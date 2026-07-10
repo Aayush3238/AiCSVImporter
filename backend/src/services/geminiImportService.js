@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import {
   CRM_FIELDS,
   CRM_STATUSES,
@@ -6,7 +6,7 @@ import {
   buildAiPrompt
 } from "./aiPrompt.js";
 
-const MODEL = "gpt-4o-mini";
+const MODEL = "gemini-2.0-flash";
 
 const crmDataProperties = CRM_FIELDS.reduce((properties, field) => {
   properties[field] = { type: "string" };
@@ -15,103 +15,69 @@ const crmDataProperties = CRM_FIELDS.reduce((properties, field) => {
 
 const importSchema = {
   type: "object",
-  additionalProperties: false,
   required: ["records"],
   properties: {
     records: {
       type: "array",
       items: {
-        anyOf: [
-          {
+        type: "object",
+        required: ["rowIndex", "status", "data", "reason"],
+        properties: {
+          rowIndex: { type: "integer" },
+          status: { type: "string" },
+          data: {
             type: "object",
-            additionalProperties: false,
-            required: ["rowIndex", "status", "data"],
-            properties: {
-              rowIndex: { type: "integer" },
-              status: { type: "string", enum: ["imported"] },
-              data: {
-                type: "object",
-                additionalProperties: false,
-                required: CRM_FIELDS,
-                properties: crmDataProperties
-              }
-            }
+            properties: crmDataProperties
           },
-          {
-            type: "object",
-            additionalProperties: false,
-            required: ["rowIndex", "status", "reason"],
-            properties: {
-              rowIndex: { type: "integer" },
-              status: { type: "string", enum: ["skipped"] },
-              reason: { type: "string" }
-            }
-          }
-        ]
+          reason: { type: "string" }
+        }
       }
     }
   }
 };
 
-function makeOpenAiClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
+function makeGeminiClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured.");
   }
 
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+  return new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY
   });
 }
 
-function getResponseText(response) {
-  if (response.output_text) {
-    return response.output_text;
-  }
-
-  const message = response.output?.find((item) => item.type === "message");
-  const outputText = message?.content?.find(
-    (content) => content.type === "output_text"
-  );
-
-  return outputText?.text || "";
-}
-
-async function callOpenAi({ headers, rows }) {
-  const client = makeOpenAiClient();
+async function callGemini({ headers, rows }) {
+  const client = makeGeminiClient();
   const prompt = buildAiPrompt({ headers, rows });
 
-  const response = await client.responses.create({
+  const response = await client.models.generateContent({
     model: MODEL,
-    input: prompt,
-    temperature: 0,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "groweasy_import_batch",
-        strict: true,
-        schema: importSchema
-      }
+    contents: prompt,
+    config: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema: importSchema
     }
   });
 
-  const text = getResponseText(response);
+  const text = response.text;
 
   if (!text) {
-    throw new Error("OpenAI returned an empty response.");
+    throw new Error("Gemini returned an empty response.");
   }
 
   return JSON.parse(text);
 }
 
-async function callOpenAiWithRetry(args) {
+async function callGeminiWithRetry(args) {
   try {
-    return await callOpenAi(args);
+    return await callGemini(args);
   } catch (firstError) {
     try {
-      return await callOpenAi(args);
+      return await callGemini(args);
     } catch (secondError) {
       throw new Error(
-        `OpenAI batch failed after retry: ${secondError.message || firstError.message}`
+        `Gemini batch failed after retry: ${secondError.message || firstError.message}`
       );
     }
   }
@@ -209,11 +175,10 @@ export async function processBatchWithAi({ headers, batchRows }) {
     rowIndex: __rowIndex,
     ...row
   }));
-  const aiResponse = await callOpenAiWithRetry({
+  const aiResponse = await callGeminiWithRetry({
     headers,
     rows: rowsForPrompt
   });
 
   return validateAndSanitizeAiResponse(aiResponse, batchRows);
 }
-

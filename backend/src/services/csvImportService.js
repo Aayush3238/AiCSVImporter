@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import { processBatchWithAi } from "./openAiImportService.js";
+import { processBatchWithAi } from "./geminiImportService.js";
 
 const BATCH_SIZE = 10;
 

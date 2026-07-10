@@ -1,6 +1,6 @@
 # AI-Powered CSV Importer for GrowEasy
 
-Hiring assignment project for uploading CSV lead files, previewing them locally, and normalizing them into a fixed GrowEasy CRM schema with AI.
+Hiring assignment project for uploading CSV lead files, previewing them locally, and normalizing them into a fixed GrowEasy CRM schema with Gemini AI.
 
 ## Project Overview
 
@@ -11,7 +11,7 @@ This app lets a user:
 3. Confirm the import.
 4. Send the file to an Express backend.
 5. Process rows in batches of 10.
-6. Use OpenAI structured output to map arbitrary columns into the GrowEasy CRM format.
+6. Use Gemini structured output to map arbitrary columns into the GrowEasy CRM format.
 7. Download the successfully normalized records as CSV.
 
 The app is stateless. There is no database, auth, payments, or hidden background processing.
@@ -25,8 +25,8 @@ The app is stateless. There is no database, auth, payments, or hidden background
 - Confirm-before-import workflow
 - Express backend import API with multer
 - Batch processing in groups of 10
-- OpenAI structured JSON output
-- Retry once on AI batch failure
+- Gemini structured JSON output
+- Retry once on Gemini batch failure
 - Validation and sanitization of AI output on the backend
 - Imported and skipped record summary
 - CSV download for normalized records
@@ -38,7 +38,7 @@ Phase 5 is complete:
 
 - CSV preview works locally in the browser
 - Backend import works
-- OpenAI batch mapping is wired in
+- Gemini batch mapping is wired in
 - Normalized records can be downloaded as CSV
 
 ## Architecture
@@ -56,7 +56,7 @@ Backend:
 - Express
 - multer for file upload
 - Papa Parse for backend CSV parsing
-- OpenAI API for mapping rows to the CRM schema
+- Gemini API for mapping rows to the CRM schema
 
 Flow:
 
@@ -64,7 +64,7 @@ Flow:
 2. User confirms the import.
 3. Frontend sends the file to `POST /api/import`.
 4. Backend parses rows and splits them into batches of 10.
-5. Each batch is sent to OpenAI.
+5. Each batch is sent to Gemini.
 6. Backend validates and sanitizes the JSON response.
 7. Backend returns imported and skipped records to the frontend.
 
@@ -115,7 +115,7 @@ npm run dev
 From `/backend/.env.example`:
 
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 PORT=5000
 FRONTEND_URL=http://localhost:3000
 ```
@@ -130,7 +130,7 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:5000
 
 ## How the AI Mapping Works
 
-The backend sends each batch to OpenAI with:
+The backend sends each batch to Gemini with:
 
 - the CSV headers
 - the current batch of rows
@@ -282,7 +282,7 @@ No Contact,,,Hyderabad,Missing contact details,Cold Lead
 
 - AI output quality depends on the source CSV and the model response.
 - `crm_status` and `data_source` are left blank when the mapping is not confident.
-- If OpenAI is unavailable, the batch is returned as skipped with a technical reason.
+- If Gemini is unavailable, the batch is returned as skipped with a technical reason.
 - The app is stateless by design, so imports are not stored in a database.
 - Downloaded CSV contains only successfully imported rows.
 
@@ -301,7 +301,7 @@ No Contact,,,Hyderabad,Missing contact details,Cold Lead
 2. Set the root directory to `backend`.
 3. Install dependencies with `npm install`.
 4. Set environment variables:
-   - `OPENAI_API_KEY`
+   - `GEMINI_API_KEY`
    - `PORT`
    - `FRONTEND_URL`
 5. Deploy the backend.
@@ -344,7 +344,7 @@ From `/backend`:
 ```bash
 node --check src/server.js
 node --check src/services/csvImportService.js
-node --check src/services/openAiImportService.js
+node --check src/services/geminiImportService.js
 node --check src/services/aiPrompt.js
 ```
 
