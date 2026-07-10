@@ -132,7 +132,9 @@ export default function HomePage() {
     }
 
     setError("");
-    setNotice("Uploading CSV to backend. Processing batch data...");
+    setNotice(
+      `Uploading CSV to backend. Processing batch 1 of ${Math.ceil(rows.length / 10)} with AI...`
+    );
     setImportResult(null);
     setIsImporting(true);
 

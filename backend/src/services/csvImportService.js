@@ -1,26 +1,7 @@
 import Papa from "papaparse";
+import { processBatchWithAi } from "./openAiImportService.js";
 
 const BATCH_SIZE = 10;
-
-const CRM_FIELDS = [
-  "created_at",
-  "name",
-  "email",
-  "country_code",
-  "mobile_without_country_code",
-  "company",
-  "city",
-  "state",
-  "country",
-  "lead_owner",
-  "crm_status",
-  "crm_note",
-  "data_source",
-  "possession_time",
-  "description"
-];
-
-const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
 function makeHttpError(message, statusCode = 400) {
   const error = new Error(message);
@@ -46,85 +27,6 @@ function chunkRows(rows) {
   }
 
   return batches;
-}
-
-function findValueByHeader(row, headerOptions) {
-  const entries = Object.entries(row);
-  const match = entries.find(([key]) =>
-    headerOptions.some((option) => key.toLowerCase().includes(option))
-  );
-
-  return match ? String(match[1] || "").trim() : "";
-}
-
-function findEmail(row) {
-  const values = Object.values(row).map((value) => String(value || ""));
-  const directEmail = findValueByHeader(row, ["email", "e-mail"]);
-
-  if (EMAIL_REGEX.test(directEmail)) {
-    return directEmail.match(EMAIL_REGEX)[0];
-  }
-
-  const valueWithEmail = values.find((value) => EMAIL_REGEX.test(value));
-  return valueWithEmail ? valueWithEmail.match(EMAIL_REGEX)[0] : "";
-}
-
-function findMobile(row) {
-  const phoneValue = findValueByHeader(row, [
-    "phone",
-    "mobile",
-    "whatsapp",
-    "contact",
-    "number"
-  ]);
-  const values = phoneValue ? [phoneValue] : Object.values(row);
-  const valueWithPhone = values
-    .map((value) => String(value || ""))
-    .find((value) => value.replace(/\D/g, "").length >= 7);
-
-  if (!valueWithPhone) {
-    return "";
-  }
-
-  return valueWithPhone.replace(/\D/g, "").slice(-10);
-}
-
-function createEmptyCrmRecord() {
-  return CRM_FIELDS.reduce((record, field) => {
-    record[field] = "";
-    return record;
-  }, {});
-}
-
-function normalizeRowForPhaseThree(row) {
-  const email = findEmail(row);
-  const mobile = findMobile(row);
-
-  if (!email && !mobile) {
-    return {
-      rowIndex: row.__rowIndex,
-      status: "skipped",
-      reason: "No email or mobile number found"
-    };
-  }
-
-  const data = {
-    ...createEmptyCrmRecord(),
-    name: findValueByHeader(row, ["name", "customer", "client"]),
-    email,
-    mobile_without_country_code: mobile,
-    company: findValueByHeader(row, ["company", "organization"]),
-    city: findValueByHeader(row, ["city", "area", "location"]),
-    state: findValueByHeader(row, ["state"]),
-    country: findValueByHeader(row, ["country"]),
-    crm_note: "Temporary Phase 3 import. AI mapping will be added in Phase 4."
-  };
-
-  return {
-    rowIndex: row.__rowIndex,
-    status: "imported",
-    data
-  };
 }
 
 function parseCsv(csvText) {
@@ -190,32 +92,59 @@ export async function processCsvImport(file) {
     throw makeHttpError("The CSV has headers but no data rows to import.");
   }
 
+  const headers = result.meta.fields.filter(Boolean);
   const batches = chunkRows(rows);
   const records = [];
   const skippedRecords = [];
+  const batchResults = [];
 
-  batches.forEach((batch) => {
-    batch.forEach((row) => {
-      const processedRow = normalizeRowForPhaseThree(row);
+  for (const [index, batch] of batches.entries()) {
+    try {
+      const processedRows = await processBatchWithAi({
+        headers,
+        batchRows: batch
+      });
 
-      if (processedRow.status === "imported") {
-        records.push(processedRow);
-      } else {
-        skippedRecords.push(processedRow);
-      }
-    });
-  });
+      processedRows.forEach((processedRow) => {
+        if (processedRow.status === "imported") {
+          records.push(processedRow);
+        } else {
+          skippedRecords.push(processedRow);
+        }
+      });
+
+      batchResults.push({
+        batchNumber: index + 1,
+        rowCount: batch.length,
+        status: "processed"
+      });
+    } catch (error) {
+      batch.forEach((row) => {
+        skippedRecords.push({
+          rowIndex: row.__rowIndex,
+          status: "skipped",
+          reason: error.message || "AI batch processing failed"
+        });
+      });
+
+      batchResults.push({
+        batchNumber: index + 1,
+        rowCount: batch.length,
+        status: "failed",
+        reason: error.message || "AI batch processing failed"
+      });
+    }
+  }
+
+  records.sort((first, second) => first.rowIndex - second.rowIndex);
+  skippedRecords.sort((first, second) => first.rowIndex - second.rowIndex);
 
   return {
     total: rows.length,
     imported: records.length,
     skipped: skippedRecords.length,
     batchSize: BATCH_SIZE,
-    batches: batches.map((batch, index) => ({
-      batchNumber: index + 1,
-      rowCount: batch.length,
-      status: "processed"
-    })),
+    batches: batchResults,
     records,
     skippedRecords
   };

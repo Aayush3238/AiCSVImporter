@@ -1,23 +1,79 @@
-const RESULT_COLUMNS = [
+const CRM_COLUMNS = [
+  "created_at",
   "name",
   "email",
+  "country_code",
   "mobile_without_country_code",
   "company",
   "city",
   "state",
   "country",
-  "crm_note"
+  "lead_owner",
+  "crm_status",
+  "crm_note",
+  "data_source",
+  "possession_time",
+  "description"
 ];
+
+function escapeCsvValue(value) {
+  const stringValue = String(value || "");
+  const escapedValue = stringValue.replace(/"/g, '""');
+
+  return `"${escapedValue}"`;
+}
+
+function downloadImportedCsv(records) {
+  const headerRow = CRM_COLUMNS.map(escapeCsvValue).join(",");
+  const dataRows = records.map((record) =>
+    CRM_COLUMNS.map((column) => escapeCsvValue(record.data?.[column])).join(",")
+  );
+  const csvContent = [headerRow, ...dataRows].join("\r\n");
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "groweasy-normalized-leads.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export default function ImportResults({ result }) {
   if (!result) {
     return null;
   }
 
+  const failedBatches =
+    result.batches?.filter((batch) => batch.status === "failed") || [];
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-5">
-        <h2 className="text-lg font-semibold text-slate-950">Import Result</h2>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Import Result
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Normalized records use the exact GrowEasy CRM field order.
+            </p>
+          </div>
+
+          <button
+            className="inline-flex items-center justify-center rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled={!result.records?.length}
+            onClick={() => downloadImportedCsv(result.records)}
+            type="button"
+          >
+            Download CSV
+          </button>
+        </div>
+
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Stat label="Total rows" value={result.total} />
           <Stat label="Imported" value={result.imported} />
@@ -28,6 +84,31 @@ export default function ImportResults({ result }) {
           {(result.batches?.length || 0) === 1 ? "batch" : "batches"} of up to{" "}
           {result.batchSize || 10} rows each.
         </p>
+        {result.batches?.length ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {result.batches.map((batch) => (
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  batch.status === "processed"
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "bg-red-50 text-red-800"
+                }`}
+                key={batch.batchNumber}
+                title={batch.reason || ""}
+              >
+                Batch {batch.batchNumber}: {batch.status}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {failedBatches.length ? (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            {failedBatches.length} AI{" "}
+            {failedBatches.length === 1 ? "batch failed" : "batches failed"}.
+            Successful batches were kept, and failed batch rows were added to
+            skipped records.
+          </div>
+        ) : null}
       </div>
 
       {result.records?.length ? (
@@ -38,7 +119,7 @@ export default function ImportResults({ result }) {
                 <th className="whitespace-nowrap border-b border-slate-200 px-4 py-3 font-semibold">
                   Row
                 </th>
-                {RESULT_COLUMNS.map((column) => (
+                {CRM_COLUMNS.map((column) => (
                   <th
                     className="whitespace-nowrap border-b border-slate-200 px-4 py-3 font-semibold"
                     key={column}
@@ -54,7 +135,7 @@ export default function ImportResults({ result }) {
                   <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-500">
                     {record.rowIndex + 1}
                   </td>
-                  {RESULT_COLUMNS.map((column) => (
+                  {CRM_COLUMNS.map((column) => (
                     <td
                       className="max-w-[280px] whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700"
                       key={`${record.rowIndex}-${column}`}
@@ -81,13 +162,30 @@ export default function ImportResults({ result }) {
           <h3 className="text-sm font-semibold text-slate-950">
             Skipped records
           </h3>
-          <ul className="mt-3 space-y-2 text-sm text-slate-600">
-            {result.skippedRecords.map((record) => (
-              <li key={record.rowIndex}>
-                Row {record.rowIndex + 1}: {record.reason}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3 max-h-64 overflow-auto rounded-md border border-slate-200">
+            <table className="min-w-full text-left text-sm">
+              <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+                <tr>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">
+                    Row
+                  </th>
+                  <th className="px-4 py-3 font-semibold">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {result.skippedRecords.map((record) => (
+                  <tr key={record.rowIndex}>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-500">
+                      {record.rowIndex + 1}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {record.reason}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
     </section>
