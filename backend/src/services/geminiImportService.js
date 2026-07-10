@@ -6,7 +6,7 @@ import {
   buildAiPrompt
 } from "./aiPrompt.js";
 
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.0-flash-lite";
 
 const crmDataProperties = CRM_FIELDS.reduce((properties, field) => {
   properties[field] = { type: "string" };
@@ -69,17 +69,25 @@ async function callGemini({ headers, rows }) {
   return JSON.parse(text);
 }
 
-async function callGeminiWithRetry(args) {
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGeminiWithRetry(args, attempt = 0) {
   try {
     return await callGemini(args);
-  } catch (firstError) {
-    try {
-      return await callGemini(args);
-    } catch (secondError) {
+  } catch (error) {
+    if (attempt >= 2) {
       throw new Error(
-        `Gemini batch failed after retry: ${secondError.message || firstError.message}`
+        `Gemini batch failed after retry: ${error.message}`
       );
     }
+
+    const isRateLimit = error.message.includes("429") || error.message.includes("RESOURCE_EXHAUSTED");
+    const waitTime = isRateLimit ? 20000 : 2000;
+
+    await delay(waitTime);
+    return callGeminiWithRetry(args, attempt + 1);
   }
 }
 
