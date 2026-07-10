@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import importRoutes from "./routes/importRoutes.js";
 
 dotenv.config();
 
@@ -19,6 +20,19 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     service: "groweasy-csv-importer-backend"
+  });
+});
+
+app.use("/api/import", importRoutes);
+
+app.use((error, req, res, next) => {
+  const statusCode = error.statusCode || 500;
+
+  res.status(statusCode).json({
+    error:
+      statusCode === 500
+        ? "Something went wrong while processing the import."
+        : error.message
   });
 });
 
