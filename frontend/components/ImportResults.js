@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import * as XLSX from "xlsx";
 
 const CRM_COLUMNS = [
   "created_at",
@@ -47,6 +48,34 @@ function downloadImportedCsv(records) {
   URL.revokeObjectURL(url);
 }
 
+function downloadImportedXlsx(records) {
+  const data = records.map((record) => {
+    const row = {};
+    CRM_COLUMNS.forEach((column) => {
+      row[column] = record.data?.[column] || "";
+    });
+    return row;
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(data, { header: CRM_COLUMNS });
+
+  const colWidths = CRM_COLUMNS.map((column) => {
+    let maxLength = column.length;
+    data.forEach((row) => {
+      const cellLength = String(row[column] || "").length;
+      if (cellLength > maxLength) {
+        maxLength = cellLength;
+      }
+    });
+    return { wch: maxLength + 2 };
+  });
+  worksheet["!cols"] = colWidths;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
+  XLSX.writeFile(workbook, "groweasy-normalized-leads.xlsx");
+}
+
 function getOriginalHeaders(skippedRecords) {
   const headerSet = new Set();
   skippedRecords.forEach((record) => {
@@ -89,6 +118,14 @@ export default function ImportResults({ result }) {
               type="button"
             >
               Download CSV
+            </button>
+            <button
+              className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              disabled={!result.records?.length}
+              onClick={() => downloadImportedXlsx(result.records)}
+              type="button"
+            >
+              Download Excel
             </button>
             {result.skippedRecords?.length ? (
               <button
