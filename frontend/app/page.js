@@ -28,17 +28,11 @@ function validateCsvFile(file) {
 }
 
 function getHeadersFromRows(rows) {
-  const headers = new Set();
+  if (!rows.length) {
+    return [];
+  }
 
-  rows.forEach((row) => {
-    Object.keys(row).forEach((key) => {
-      if (key && key !== "__previewId") {
-        headers.add(key);
-      }
-    });
-  });
-
-  return Array.from(headers);
+  return Object.keys(rows[0]).filter((key) => key && key !== "__previewId");
 }
 
 export default function HomePage() {
@@ -201,6 +195,20 @@ export default function HomePage() {
           {notice ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900">
               {notice}
+            </div>
+          ) : null}
+
+          {isImporting ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent"></div>
+                <p className="text-sm font-medium text-emerald-900">
+                  Processing with AI... This may take a moment.
+                </p>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-200">
+                <div className="h-full animate-pulse rounded-full bg-emerald-600"></div>
+              </div>
             </div>
           ) : null}
 

@@ -1,4 +1,6 @@
-export default function PreviewTable({ headers, rows }) {
+import { memo } from "react";
+
+function PreviewTable({ headers, rows }) {
   if (!rows.length) {
     return null;
   }
@@ -59,3 +61,5 @@ export default function PreviewTable({ headers, rows }) {
     </section>
   );
 }
+
+export default memo(PreviewTable);

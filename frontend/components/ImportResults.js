@@ -1,25 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
+import Papa from "papaparse";
 import { CRM_FIELDS as CRM_COLUMNS } from "../../shared/constants.js";
 import * as XLSX from "xlsx";
 
-function escapeCsvValue(value) {
-  const stringValue = String(value || "");
-  const escapedValue = stringValue.replace(/"/g, '""');
-
-  return `"${escapedValue}"`;
-}
-
 function downloadImportedCsv(records) {
-  const headerRow = CRM_COLUMNS.map(escapeCsvValue).join(",");
-  const dataRows = records.map((record) =>
-    CRM_COLUMNS.map((column) => escapeCsvValue(record.data?.[column])).join(",")
-  );
-  const csvContent = [headerRow, ...dataRows].join("\r\n");
-  const blob = new Blob([csvContent], {
-    type: "text/csv;charset=utf-8"
+  const data = records.map((record) => {
+    const row = {};
+    CRM_COLUMNS.forEach((column) => {
+      row[column] = record.data?.[column] || "";
+    });
+    return row;
   });
+
+  const csv = Papa.unparse(data, { columns: CRM_COLUMNS });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -69,16 +65,22 @@ function getOriginalHeaders(skippedRecords) {
   return Array.from(headerSet);
 }
 
-export default function ImportResults({ result }) {
+function ImportResults({ result }) {
   const [showSkipped, setShowSkipped] = useState(false);
+
+  const failedBatches = useMemo(
+    () => result?.batches?.filter((batch) => batch.status === "failed") || [],
+    [result?.batches]
+  );
+
+  const skippedHeaders = useMemo(
+    () => getOriginalHeaders(result?.skippedRecords || []),
+    [result?.skippedRecords]
+  );
 
   if (!result) {
     return null;
   }
-
-  const failedBatches =
-    result.batches?.filter((batch) => batch.status === "failed") || [];
-  const skippedHeaders = getOriginalHeaders(result.skippedRecords || []);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -302,3 +304,5 @@ function Stat({ label, value }) {
     </div>
   );
 }
+
+export default memo(ImportResults);
