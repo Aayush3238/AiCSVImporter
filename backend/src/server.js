@@ -7,11 +7,21 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URLS = [
+  process.env.FRONTEND_URL,
+  "https://ai-csv-importer-kohl.vercel.app",
+  "http://localhost:3000"
+].filter(Boolean);
 
 app.use(
   cors({
-    origin: FRONTEND_URL
+    origin: (origin, callback) => {
+      if (!origin || FRONTEND_URLS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    }
   })
 );
 app.use(express.json());
