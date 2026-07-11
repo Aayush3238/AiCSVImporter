@@ -10,11 +10,28 @@ const upload = multer({
   }
 });
 
+const IMPORT_TIMEOUT_MS = 5 * 60 * 1000;
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Import request timed out.")), ms)
+    )
+  ]);
+}
+
 router.post("/", upload.single("file"), async (req, res, next) => {
   try {
-    const result = await processCsvImport(req.file);
+    const result = await withTimeout(
+      processCsvImport(req.file),
+      IMPORT_TIMEOUT_MS
+    );
     res.json(result);
   } catch (error) {
+    if (error.message === "Import request timed out.") {
+      error.statusCode = 504;
+    }
     next(error);
   }
 });

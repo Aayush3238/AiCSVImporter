@@ -2,6 +2,7 @@ import Papa from "papaparse";
 import { processBatchWithAi } from "./geminiImportService.js";
 
 const BATCH_SIZE = 10;
+const CONCURRENCY_LIMIT = 3;
 
 function makeHttpError(message, statusCode = 400) {
   const error = new Error(message);
@@ -13,8 +14,7 @@ function isValidCsvFile(file) {
   const hasCsvName = file.originalname.toLowerCase().endsWith(".csv");
   const hasCsvMime =
     file.mimetype === "text/csv" ||
-    file.mimetype === "application/vnd.ms-excel" ||
-    file.mimetype === "application/octet-stream";
+    file.mimetype === "application/vnd.ms-excel";
 
   return hasCsvName || hasCsvMime;
 }
@@ -98,7 +98,7 @@ export async function processCsvImport(file) {
   const skippedRecords = [];
   const batchResults = [];
 
-  for (const [index, batch] of batches.entries()) {
+  async function processBatch(index, batch) {
     try {
       const processedRows = await processBatchWithAi({
         headers,
@@ -136,6 +136,13 @@ export async function processCsvImport(file) {
         reason: error.message || "AI batch processing failed"
       });
     }
+  }
+
+  for (let i = 0; i < batches.length; i += CONCURRENCY_LIMIT) {
+    const chunk = batches.slice(i, i + CONCURRENCY_LIMIT);
+    await Promise.all(
+      chunk.map((batch, offset) => processBatch(i + offset, batch))
+    );
   }
 
   records.sort((first, second) => first.rowIndex - second.rowIndex);
