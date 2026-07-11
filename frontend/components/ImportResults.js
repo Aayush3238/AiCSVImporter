@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 const CRM_COLUMNS = [
   "created_at",
   "name",
@@ -43,13 +47,26 @@ function downloadImportedCsv(records) {
   URL.revokeObjectURL(url);
 }
 
+function getOriginalHeaders(skippedRecords) {
+  const headerSet = new Set();
+  skippedRecords.forEach((record) => {
+    if (record.originalData) {
+      Object.keys(record.originalData).forEach((key) => headerSet.add(key));
+    }
+  });
+  return Array.from(headerSet);
+}
+
 export default function ImportResults({ result }) {
+  const [showSkipped, setShowSkipped] = useState(false);
+
   if (!result) {
     return null;
   }
 
   const failedBatches =
     result.batches?.filter((batch) => batch.status === "failed") || [];
+  const skippedHeaders = getOriginalHeaders(result.skippedRecords || []);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -64,15 +81,78 @@ export default function ImportResults({ result }) {
             </p>
           </div>
 
-          <button
-            className="inline-flex items-center justify-center rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={!result.records?.length}
-            onClick={() => downloadImportedCsv(result.records)}
-            type="button"
-          >
-            Download CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="inline-flex items-center justify-center rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              disabled={!result.records?.length}
+              onClick={() => downloadImportedCsv(result.records)}
+              type="button"
+            >
+              Download CSV
+            </button>
+            {result.skippedRecords?.length ? (
+              <button
+                className={`inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold shadow-sm transition ${
+                  showSkipped
+                    ? "bg-slate-950 text-white hover:bg-slate-800"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => setShowSkipped((prev) => !prev)}
+                type="button"
+              >
+                {showSkipped ? "Hide Skipped" : "View Skipped"}
+              </button>
+            ) : null}
+          </div>
         </div>
+
+        {showSkipped && result.skippedRecords?.length ? (
+          <div className="mt-4 max-h-[320px] overflow-auto rounded-md border border-slate-200">
+            <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+                <tr>
+                  <th className="sticky left-0 z-20 border-b border-slate-200 bg-slate-100 px-4 py-3 font-semibold">
+                    Row
+                  </th>
+                  {skippedHeaders.map((header) => (
+                    <th
+                      className="whitespace-nowrap border-b border-slate-200 px-4 py-3 font-semibold"
+                      key={header}
+                    >
+                      {header}
+                    </th>
+                  ))}
+                  <th className="border-b border-slate-200 px-4 py-3 font-semibold">
+                    Reason
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {result.skippedRecords.map((record) => (
+                  <tr className="hover:bg-slate-50" key={record.rowIndex}>
+                    <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-medium text-slate-500">
+                      {record.rowIndex + 1}
+                    </td>
+                    {skippedHeaders.map((header) => (
+                      <td
+                        className="max-w-[280px] whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700"
+                        key={`${record.rowIndex}-${header}`}
+                        title={record.originalData?.[header] || ""}
+                      >
+                        <span className="block overflow-hidden text-ellipsis">
+                          {record.originalData?.[header] || ""}
+                        </span>
+                      </td>
+                    ))}
+                    <td className="border-b border-slate-100 px-4 py-3 text-slate-700">
+                      {record.reason}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Stat label="Total rows" value={result.total} />
@@ -157,7 +237,7 @@ export default function ImportResults({ result }) {
         </p>
       )}
 
-      {result.skippedRecords?.length ? (
+      {result.skippedRecords?.length && !showSkipped ? (
         <div className="border-t border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-950">
             Skipped records

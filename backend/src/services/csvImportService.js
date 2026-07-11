@@ -120,10 +120,12 @@ export async function processCsvImport(file) {
       });
     } catch (error) {
       batch.forEach((row) => {
+        const { __rowIndex, ...originalData } = row;
         skippedRecords.push({
           rowIndex: row.__rowIndex,
           status: "skipped",
-          reason: error.message || "AI batch processing failed"
+          reason: error.message || "AI batch processing failed",
+          originalData
         });
       });
 

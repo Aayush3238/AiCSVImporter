@@ -103,7 +103,7 @@ function buildEmptyData() {
   }, {});
 }
 
-function sanitizeImportedRecord(record) {
+function sanitizeImportedRecord(record, originalRow) {
   const data = buildEmptyData();
 
   CRM_FIELDS.forEach((field) => {
@@ -122,7 +122,8 @@ function sanitizeImportedRecord(record) {
     return {
       rowIndex: record.rowIndex,
       status: "skipped",
-      reason: "No email or mobile number found"
+      reason: "No email or mobile number found",
+      originalData: originalRow || {}
     };
   }
 
@@ -133,15 +134,22 @@ function sanitizeImportedRecord(record) {
   };
 }
 
-function sanitizeSkippedRecord(record) {
+function sanitizeSkippedRecord(record, originalRow) {
   return {
     rowIndex: record.rowIndex,
     status: "skipped",
-    reason: sanitizeString(record.reason) || "Skipped by AI mapping"
+    reason: sanitizeString(record.reason) || "Skipped by AI mapping",
+    originalData: originalRow || {}
   };
 }
 
 function validateAndSanitizeAiResponse(aiResponse, batchRows) {
+  const rowsByRowIndex = new Map();
+  batchRows.forEach((row) => {
+    const { __rowIndex, ...originalData } = row;
+    rowsByRowIndex.set(__rowIndex, originalData);
+  });
+
   const expectedRowIndexes = new Set(batchRows.map((row) => row.__rowIndex));
   const recordsByRowIndex = new Map();
 
@@ -154,22 +162,26 @@ function validateAndSanitizeAiResponse(aiResponse, batchRows) {
       return;
     }
 
+    const originalRow = rowsByRowIndex.get(record.rowIndex);
+
     if (record.status === "imported") {
-      recordsByRowIndex.set(record.rowIndex, sanitizeImportedRecord(record));
+      recordsByRowIndex.set(record.rowIndex, sanitizeImportedRecord(record, originalRow));
       return;
     }
 
     if (record.status === "skipped") {
-      recordsByRowIndex.set(record.rowIndex, sanitizeSkippedRecord(record));
+      recordsByRowIndex.set(record.rowIndex, sanitizeSkippedRecord(record, originalRow));
     }
   });
 
   batchRows.forEach((row) => {
     if (!recordsByRowIndex.has(row.__rowIndex)) {
+      const { __rowIndex, ...originalData } = row;
       recordsByRowIndex.set(row.__rowIndex, {
         rowIndex: row.__rowIndex,
         status: "skipped",
-        reason: "AI response did not include this row"
+        reason: "AI response did not include this row",
+        originalData
       });
     }
   });
