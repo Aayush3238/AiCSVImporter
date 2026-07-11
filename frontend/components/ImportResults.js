@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo } from "react";
 import Papa from "papaparse";
 import { CRM_FIELDS as CRM_COLUMNS } from "../lib/constants.js";
 import * as XLSX from "xlsx";
@@ -55,27 +55,10 @@ function downloadImportedXlsx(records) {
   XLSX.writeFile(workbook, "groweasy-normalized-leads.xlsx");
 }
 
-function getOriginalHeaders(skippedRecords) {
-  const headerSet = new Set();
-  skippedRecords.forEach((record) => {
-    if (record.originalData) {
-      Object.keys(record.originalData).forEach((key) => headerSet.add(key));
-    }
-  });
-  return Array.from(headerSet);
-}
-
 function ImportResults({ result }) {
-  const [showSkipped, setShowSkipped] = useState(false);
-
   const failedBatches = useMemo(
     () => result?.batches?.filter((batch) => batch.status === "failed") || [],
     [result?.batches]
-  );
-
-  const skippedHeaders = useMemo(
-    () => getOriginalHeaders(result?.skippedRecords || []),
-    [result?.skippedRecords]
   );
 
   if (!result) {
@@ -112,69 +95,8 @@ function ImportResults({ result }) {
             >
               Download Excel
             </button>
-            {result.skippedRecords?.length ? (
-              <button
-                className={`inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold shadow-sm transition ${
-                  showSkipped
-                    ? "bg-slate-950 text-white hover:bg-slate-800"
-                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-                onClick={() => setShowSkipped((prev) => !prev)}
-                type="button"
-              >
-                {showSkipped ? "Hide Skipped" : "View Skipped"}
-              </button>
-            ) : null}
           </div>
         </div>
-
-        {showSkipped && result.skippedRecords?.length ? (
-          <div className="mt-4 max-h-[320px] overflow-auto rounded-md border border-slate-200">
-            <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-                <tr>
-                  <th className="sticky left-0 z-20 border-b border-slate-200 bg-slate-100 px-4 py-3 font-semibold">
-                    Row
-                  </th>
-                  {skippedHeaders.map((header) => (
-                    <th
-                      className="whitespace-nowrap border-b border-slate-200 px-4 py-3 font-semibold"
-                      key={header}
-                    >
-                      {header}
-                    </th>
-                  ))}
-                  <th className="border-b border-slate-200 px-4 py-3 font-semibold">
-                    Reason
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {result.skippedRecords.map((record) => (
-                  <tr className="hover:bg-slate-50" key={record.rowIndex}>
-                    <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-medium text-slate-500">
-                      {record.rowIndex + 1}
-                    </td>
-                    {skippedHeaders.map((header) => (
-                      <td
-                        className="max-w-[280px] whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700"
-                        key={`${record.rowIndex}-${header}`}
-                        title={record.originalData?.[header] || ""}
-                      >
-                        <span className="block overflow-hidden text-ellipsis">
-                          {record.originalData?.[header] || ""}
-                        </span>
-                      </td>
-                    ))}
-                    <td className="border-b border-slate-100 px-4 py-3 text-slate-700">
-                      {record.reason}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Stat label="Total rows" value={result.total} />
@@ -259,7 +181,7 @@ function ImportResults({ result }) {
         </p>
       )}
 
-      {result.skippedRecords?.length && !showSkipped ? (
+      {result.skippedRecords?.length ? (
         <div className="border-t border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-950">
             Skipped records
