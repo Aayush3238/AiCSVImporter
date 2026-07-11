@@ -6,7 +6,7 @@ import {
   buildAiPrompt
 } from "./aiPrompt.js";
 
-const MODEL = "gemini-2.0-flash-lite";
+const MODEL = "gemini-3.1-flash-lite";
 
 const crmDataProperties = CRM_FIELDS.reduce((properties, field) => {
   properties[field] = { type: "string" };
@@ -27,6 +27,7 @@ const importSchema = {
           status: { type: "string" },
           data: {
             type: "object",
+            required: CRM_FIELDS,
             properties: crmDataProperties
           },
           reason: { type: "string" }
