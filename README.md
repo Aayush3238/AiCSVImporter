@@ -10,9 +10,9 @@ This app lets a user:
 2. Preview the raw rows in the browser before any backend call.
 3. Confirm the import.
 4. Send the file to an Express backend.
-5. Process rows in batches of 10.
+5. Process rows in batches of 10, up to 3 batches concurrently.
 6. Use Gemini structured output to map arbitrary columns into the GrowEasy CRM format.
-7. Download the successfully normalized records as CSV.
+7. Download the successfully normalized records as CSV or Excel.
 
 The app is stateless. There is no database, auth, payments, or hidden background processing.
 
@@ -24,22 +24,21 @@ The app is stateless. There is no database, auth, payments, or hidden background
 - Responsive preview table with sticky headers and scrolling
 - Confirm-before-import workflow
 - Express backend import API with multer
-- Batch processing in groups of 10
-- Gemini structured JSON output
-- Retry once on Gemini batch failure
+- Batch processing in groups of 10 with 3 concurrent batches
+- 5-minute request timeout on import endpoint
+- Gemini structured JSON output with retry logic
 - Validation and sanitization of AI output on the backend
-- Imported and skipped record summary
+- Imported and skipped record summary with batch status badges
+- Skipped records viewer with original data and skip reasons
 - CSV download for normalized records
-- Clean responsive UI suitable for a hiring assignment
+- Excel download with auto-sized columns
+- Animated progress indicator during import
+- React.memo optimization for large datasets
+- Clean responsive UI
 
 ## Current Status
 
-Phase 5 is complete:
-
-- CSV preview works locally in the browser
-- Backend import works
-- Gemini batch mapping is wired in
-- Normalized records can be downloaded as CSV
+The project is feature-complete. The core import flow works end-to-end with AI-powered normalization, parallel batch processing, and export functionality.
 
 ## Architecture
 
@@ -48,15 +47,23 @@ Frontend:
 - Next.js App Router
 - JavaScript
 - Tailwind CSS
-- Papa Parse for local preview parsing
+- Papa Parse for local preview and CSV export
+- xlsx for Excel export
+- React.memo for render optimization
 
 Backend:
 
-- Node.js
+- Node.js (ESM)
 - Express
 - multer for file upload
 - Papa Parse for backend CSV parsing
 - Gemini API for mapping rows to the CRM schema
+- Parallel batch processing (3 concurrent)
+- 5-minute request timeout
+
+Shared:
+
+- `/shared/constants.js` — CRM fields, statuses, and data sources used by both frontend and backend
 
 Flow:
 
@@ -64,24 +71,38 @@ Flow:
 2. User confirms the import.
 3. Frontend sends the file to `POST /api/import`.
 4. Backend parses rows and splits them into batches of 10.
-5. Each batch is sent to Gemini.
+5. Up to 3 batches are sent to Gemini concurrently.
 6. Backend validates and sanitizes the JSON response.
 7. Backend returns imported and skipped records to the frontend.
+8. User can download results as CSV or Excel.
 
 ## Folder Structure
 
 ```text
+/shared
+  constants.js          # CRM fields, statuses, data sources
+
 /frontend
   /app
+    page.js             # Main page with state management
+    layout.js           # Root layout
+    globals.css         # Tailwind styles
   /components
+    FileUpload.js       # Drag-and-drop upload component
+    PreviewTable.js     # CSV preview table
+    ImportResults.js    # Results display + CSV/Excel download
   package.json
   .env.example
 
 /backend
   /src
+    server.js           # Express app entry point
     /routes
+      importRoutes.js   # POST /api/import with timeout
     /services
-    server.js
+      aiPrompt.js       # CRM schema + Gemini prompt builder
+      csvImportService.js      # CSV validation + parallel batching
+      geminiImportService.js   # Gemini API client + retry logic
   package.json
   .env.example
 
@@ -96,6 +117,7 @@ From `/backend`:
 
 ```bash
 npm install
+cp .env.example .env   # Fill in GEMINI_API_KEY
 npm run dev
 ```
 
@@ -105,6 +127,7 @@ From `/frontend`:
 
 ```bash
 npm install
+cp .env.example .env.local   # Set NEXT_PUBLIC_BACKEND_URL
 npm run dev
 ```
 
@@ -112,17 +135,13 @@ npm run dev
 
 ### Backend `.env`
 
-From `/backend/.env.example`:
-
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
 PORT=5000
 FRONTEND_URL=http://localhost:3000
 ```
 
-### Frontend `.env`
-
-From `/frontend/.env.example`:
+### Frontend `.env.local`
 
 ```env
 NEXT_PUBLIC_BACKEND_URL=http://localhost:5000
@@ -212,6 +231,11 @@ Field name:
 
 - `file`
 
+Limits:
+
+- Max file size: 5 MB
+- Request timeout: 5 minutes
+
 Response shape:
 
 ```json
@@ -284,7 +308,7 @@ No Contact,,,Hyderabad,Missing contact details,Cold Lead
 - `crm_status` and `data_source` are left blank when the mapping is not confident.
 - If Gemini is unavailable, the batch is returned as skipped with a technical reason.
 - The app is stateless by design, so imports are not stored in a database.
-- Downloaded CSV contains only successfully imported rows.
+- Downloaded files contain only successfully imported rows.
 
 ## Deployment Steps
 
@@ -310,14 +334,6 @@ No Contact,,,Hyderabad,Missing contact details,Cold Lead
 
 The frontend must point to the deployed backend URL, not `localhost`.
 
-## Screenshots
-
-Add screenshots here after deployment:
-
-- `![Preview screen](docs/screenshots/preview.png)`
-- `![Import results](docs/screenshots/results.png)`
-- `![Mobile preview](docs/screenshots/mobile.png)`
-
 ## Testing Instructions
 
 ### Manual checks
@@ -326,8 +342,10 @@ Add screenshots here after deployment:
 2. Upload a valid CSV.
 3. Verify preview renders before any backend call.
 4. Click `Confirm Import`.
-5. Verify results render.
-6. Verify downloaded CSV opens correctly.
+5. Verify the progress indicator appears.
+6. Verify results render with batch status badges.
+7. Verify downloaded CSV and Excel open correctly.
+8. Toggle skipped records view and verify original data + reasons.
 
 ### Build checks
 
@@ -337,17 +355,14 @@ From `/frontend`:
 npm run build
 ```
 
-### Backend checks
+### Backend syntax checks
 
 From `/backend`:
 
 ```bash
 node --check src/server.js
+node --check src/routes/importRoutes.js
 node --check src/services/csvImportService.js
 node --check src/services/geminiImportService.js
 node --check src/services/aiPrompt.js
 ```
-
-## Final Notes
-
-This repository is intentionally scoped to the assignment requirements only. It avoids database, auth, and unrelated product features so the import flow stays easy to review and extend.
