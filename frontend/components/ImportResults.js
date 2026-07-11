@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react";
 import Papa from "papaparse";
-import { CRM_FIELDS as CRM_COLUMNS } from "../../shared/constants.js";
+import { CRM_FIELDS as CRM_COLUMNS } from "../lib/constants.js";
 import * as XLSX from "xlsx";
 
 function downloadImportedCsv(records) {
