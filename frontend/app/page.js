@@ -1,7 +1,7 @@
 "use client";
 
 import Papa from "papaparse";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import FileUpload from "../components/FileUpload";
 import ImportResults from "../components/ImportResults";
 import PreviewTable from "../components/PreviewTable";
@@ -52,80 +52,85 @@ export default function HomePage() {
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
-  function resetPreview() {
+  const resetPreview = useCallback(() => {
     setHeaders([]);
     setRows([]);
     setNotice("");
     setImportResult(null);
-  }
+  }, []);
 
-  function handleFileSelect(file) {
-    setError("");
-    resetPreview();
-    setFileName(file.name);
-    setSelectedFile(null);
+  const handleFileSelect = useCallback(
+    (file) => {
+      setError("");
+      resetPreview();
+      setFileName(file.name);
+      setSelectedFile(null);
 
-    const validationError = validateCsvFile(file);
+      const validationError = validateCsvFile(file);
 
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setIsParsing(true);
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (header) => header.trim(),
-      complete: (result) => {
-        setIsParsing(false);
-
-        if (result.errors.length) {
-          const firstError = result.errors[0];
-          setError(
-            `CSV parsing error on row ${firstError.row ?? "unknown"}: ${firstError.message}`
-          );
-          return;
-        }
-
-        const parsedRows = result.data.filter((row) =>
-          Object.values(row).some((value) => String(value || "").trim() !== "")
-        );
-
-        if (!parsedRows.length) {
-          setError("The CSV has headers but no data rows to preview.");
-          return;
-        }
-
-        const previewRows = parsedRows.map((row, index) => ({
-          ...row,
-          __previewId: `${file.name}-${index}`
-        }));
-        const parsedHeaders = result.meta.fields?.length
-          ? result.meta.fields.filter(Boolean)
-          : getHeadersFromRows(previewRows);
-
-        if (!parsedHeaders.length) {
-          setError("The CSV does not contain usable column headers.");
-          return;
-        }
-
-        setHeaders(parsedHeaders);
-        setRows(previewRows);
-        setSelectedFile(file);
-        setNotice(
-          "Preview loaded locally. The backend and AI have not been called yet."
-        );
-      },
-      error: (parseError) => {
-        setIsParsing(false);
-        setError(parseError.message || "Unable to parse the CSV file.");
+      if (validationError) {
+        setError(validationError);
+        return;
       }
-    });
-  }
 
-  async function handleConfirmImport() {
+      setIsParsing(true);
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+        complete: (result) => {
+          setIsParsing(false);
+
+          if (result.errors.length) {
+            const firstError = result.errors[0];
+            setError(
+              `CSV parsing error on row ${firstError.row ?? "unknown"}: ${firstError.message}`
+            );
+            return;
+          }
+
+          const parsedRows = result.data.filter((row) =>
+            Object.values(row).some(
+              (value) => String(value || "").trim() !== ""
+            )
+          );
+
+          if (!parsedRows.length) {
+            setError("The CSV has headers but no data rows to preview.");
+            return;
+          }
+
+          const previewRows = parsedRows.map((row, index) => ({
+            ...row,
+            __previewId: `${file.name}-${index}`
+          }));
+          const parsedHeaders = result.meta.fields?.length
+            ? result.meta.fields.filter(Boolean)
+            : getHeadersFromRows(previewRows);
+
+          if (!parsedHeaders.length) {
+            setError("The CSV does not contain usable column headers.");
+            return;
+          }
+
+          setHeaders(parsedHeaders);
+          setRows(previewRows);
+          setSelectedFile(file);
+          setNotice(
+            "Preview loaded locally. The backend and AI have not been called yet."
+          );
+        },
+        error: (parseError) => {
+          setIsParsing(false);
+          setError(parseError.message || "Unable to parse the CSV file.");
+        }
+      });
+    },
+    [resetPreview]
+  );
+
+  const handleConfirmImport = useCallback(async () => {
     if (!selectedFile) {
       setError("Please upload and preview a valid CSV before importing.");
       return;
@@ -164,7 +169,7 @@ export default function HomePage() {
     } finally {
       setIsImporting(false);
     }
-  }
+  }, [selectedFile, rows.length]);
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
